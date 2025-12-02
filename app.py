@@ -7,16 +7,16 @@ import time
 import tempfile
 import glob, os
 from moviepy import VideoFileClip
+import shutil
 
 # First we need to load our best.pt model
 
 @st.cache_resource # This loads model in memory, so it wont reload the model each time
 def load_model():
-    model = YOLO("C:\Workspace\Labib\Projects\Bondstein Project\electronics_yolo_final.pt")
+    model = YOLO("electronics_yolo_final_v2.pt")
     return model
 
 model = load_model()
-
 
 # Now for basic page settings,
 
@@ -40,6 +40,7 @@ st.sidebar.write("---")
 
 def count_objects(results):
     counts = {}
+
     for box in results[0].boxes:
         cls = int(box.cls[0])
         name = model.names[cls]
@@ -67,7 +68,7 @@ if mode == "Image Upload":
         st.image(plotted, use_column_width=True) # shows the resulted image
 
         # Show stats
-        st.subheader("📊 Objects Detected")
+        st.subheader("Objects Detected")
         counts = count_objects(results)
         st.write(counts)
 
@@ -78,6 +79,9 @@ elif mode == "Video Upload":
     video_file = st.file_uploader("Upload a Video", type=["mp4", "avi", "mov"])
 
     if video_file:
+        if os.path.exists("runs"):
+            shutil.rmtree("runs")
+
         tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") # Save temporary input video (YOLO needs a file path)
         tfile.write(video_file.read())
 
@@ -91,7 +95,7 @@ elif mode == "Video Upload":
             save=True,
             project="runs/detect",
             name="streamlit_video",
-            exist_ok=True
+            exist_ok=True,
         )
 
         # Find YOLO output (could be mp4 or avi)
@@ -131,7 +135,7 @@ elif mode == "Video Upload":
         # Show processed video
         if output_path and os.path.exists(output_path):
             st.subheader("YOLO Detection Output")
-            st.video(output_path)
+            st.video(output_path , autoplay=True)
         else:
             st.error("Converted MP4 not found on disk.")
             st.stop()
