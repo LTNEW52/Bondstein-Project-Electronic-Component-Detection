@@ -21,3 +21,7 @@ I think it is ready, but will try to fine tune more. I have to update the counte
 Today i fixed the count, so the count is showing on the video now. It was a big hassel though, because as it was encoded in .mp4v, it was not showing. Had to use moviepy to encode properly.
 
 Also for testing, used a totally different environment. It performed very very poorly on images, detecting most of them as battery. Although the video performed very good! Wonder why is that? Although video was much closer, let me run another test...
+
+Interesting! so yes distance is a variable, but also angle. In my dataset most the images are in angled position. But for test I took the picture from above. It is performing the best when close and angled! Although sometimes it is giving the wrong label, probably for lighting difference too.
+
+I think i will stop here for now, yolo model was amazing. I am in NLP, so i didnt knew much about computer vision, but YOLO was fun! It was tough but fun. It will be important in autonomus drone thesis. But future what i can do to upgrade this? Dataset is the main concern here, i need to take more picture in more environment...

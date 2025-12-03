@@ -1,3 +1,11 @@
+# REQUIREMENTS
+
+# 1. ultralytics
+# 2. streamlit
+# 3. moviepy
+# 4. streamlit-webrtc
+
+
 import streamlit as st # To use Streamlit, we need to import it
 from ultralytics import YOLO
 from PIL import Image
@@ -8,6 +16,8 @@ import tempfile
 import glob, os
 from moviepy import VideoFileClip
 import shutil
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+
 
 # First we need to load our best.pt model
 
@@ -17,6 +27,7 @@ def load_model():
     return model
 
 model = load_model()
+
 
 # Now for basic page settings,
 
@@ -47,6 +58,7 @@ def count_objects(result):
         counts[name] = counts.get(name, 0) + 1
     return counts
 
+
 # For video per frame count,
 
 def process_video_with_overlay(input_path, output_path, model, conf):
@@ -60,7 +72,11 @@ def process_video_with_overlay(input_path, output_path, model, conf):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
+    # Predicting using the best.pt model
+
     results_stream = model.predict(source=input_path, conf=conf, stream=True)
+
+    # Counting the components and writing them on the video
 
     for result in results_stream:
         frame = result.plot()
@@ -87,12 +103,14 @@ def process_video_with_overlay(input_path, output_path, model, conf):
 
     out.release()
 
+    # Converting because Streamlit cant show .mp4v, we need proper .mp4
+
     h264_output = output_path.replace(".mp4", "_h264.mp4")
 
     clip = VideoFileClip(output_path)
     clip.write_videofile(
         h264_output,
-        codec="libx264",
+        codec="libx264", # Encode method
         audio=False,
         logger=None
     )
@@ -123,9 +141,8 @@ if mode == "Image Upload":
         # Show stats
         st.subheader("Total Detections in Image")
         counts = count_objects(results[0])
-        st.dataframe(counts, width="content")
+        st.dataframe(counts, width="content") # Gives us a nice table!
         
-
 
 # For video upload,
 
@@ -133,6 +150,8 @@ elif mode == "Video Upload":
     video_file = st.file_uploader("Upload a Video", type=["mp4", "avi", "mov"])
 
     if video_file:
+
+        # Removing past video each time there is a new one
 
         for f in glob.glob("*.mp4"):
             os.remove(f)
@@ -142,13 +161,6 @@ elif mode == "Video Upload":
 
         st.video(tfile.name)
         st.subheader("Processing Video...")
-
-        # Run YOLO on the uploaded video
-        results = model.predict(
-            source=tfile.name,
-            conf=confidence,
-            stream=False
-        )
 
         overlay_output = "output_overlay.mp4"
 
@@ -163,3 +175,37 @@ elif mode == "Video Upload":
         st.subheader("YOLO Detection Output")
         st.write("This Video will be deleted when uploading another video, Be sure to move or make a copy!")
         st.video(h264_path, autoplay=True)
+
+
+# Lastly, Live video/webcam feed
+
+elif mode == "Webcam":
+    st.write("Real-time detection... ")
+
+    class YOLOTransformer(VideoTransformerBase):
+        def transform(self, frame):
+            img = frame.to_ndarray(format="bgr24")
+
+            results = model.predict(img, conf=confidence)
+            annotated = results[0].plot()
+
+            # Count objects
+            counts = count_objects(results)
+            st.session_state["counts"] = counts
+
+            return annotated
+
+    # Start webcam
+    webrtc_streamer(
+        key="example",
+        video_transformer_factory=YOLOTransformer,
+        media_stream_constraints={"video": True, "audio": False},
+    )
+
+    # Live stats
+    st.subheader("Real-Time Object Count")
+
+    if "counts" in st.session_state:
+        st.write(st.session_state["counts"])
+    else:
+        st.write("Waiting for detections...")
