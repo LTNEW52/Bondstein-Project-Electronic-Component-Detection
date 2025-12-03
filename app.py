@@ -38,14 +38,67 @@ st.sidebar.write("---")
 
 # Next is counting present objects,
 
-def count_objects(results):
+def count_objects(result):
     counts = {}
 
-    for box in results[0].boxes:
+    for box in result.boxes:
         cls = int(box.cls[0])
         name = model.names[cls]
         counts[name] = counts.get(name, 0) + 1
     return counts
+
+# For video per frame count,
+
+def process_video_with_overlay(input_path, output_path, model, conf):
+
+    cap = cv2.VideoCapture(input_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    results_stream = model.predict(source=input_path, conf=conf, stream=True)
+
+    for result in results_stream:
+        frame = result.plot()
+        frame_counts = count_objects(result)
+
+        y_offset = 30
+        line_height = 25
+
+        for cls, count in frame_counts.items():
+            line = f"{cls}: {count}"
+            cv2.putText(
+                frame,
+                line,
+                (10, y_offset),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA
+            )
+            y_offset += line_height
+
+        out.write(frame)
+
+    out.release()
+
+    h264_output = output_path.replace(".mp4", "_h264.mp4")
+
+    clip = VideoFileClip(output_path)
+    clip.write_videofile(
+        h264_output,
+        codec="libx264",
+        audio=False,
+        logger=None
+    )
+    clip.close()
+
+    return h264_output
 
 
 # Now for image upload,
@@ -68,9 +121,10 @@ if mode == "Image Upload":
         st.image(plotted, use_column_width=True) # shows the resulted image
 
         # Show stats
-        st.subheader("Objects Detected")
-        counts = count_objects(results)
-        st.write(counts)
+        st.subheader("Total Detections in Image")
+        counts = count_objects(results[0])
+        st.dataframe(counts, width="content")
+        
 
 
 # For video upload,
@@ -79,8 +133,9 @@ elif mode == "Video Upload":
     video_file = st.file_uploader("Upload a Video", type=["mp4", "avi", "mov"])
 
     if video_file:
-        if os.path.exists("runs"):
-            shutil.rmtree("runs")
+
+        for f in glob.glob("*.mp4"):
+            os.remove(f)
 
         tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") # Save temporary input video (YOLO needs a file path)
         tfile.write(video_file.read())
@@ -92,55 +147,19 @@ elif mode == "Video Upload":
         results = model.predict(
             source=tfile.name,
             conf=confidence,
-            save=True,
-            project="runs/detect",
-            name="streamlit_video",
-            exist_ok=True,
+            stream=False
         )
 
-        # Find YOLO output (could be mp4 or avi)
+        overlay_output = "output_overlay.mp4"
 
-        mp4_files = glob.glob("runs/detect/streamlit_video/*.mp4")
-        avi_files = glob.glob("runs/detect/streamlit_video/*.avi")
+        st.info("Generating video with per-frame counts...")
+        h264_path = process_video_with_overlay(
+            input_path=tfile.name,
+            output_path=overlay_output,
+            model=model,
+            conf=confidence
+        )
 
-        output_path = None
-
-        if mp4_files:
-            # YOLO already produced an MP4
-            output_path = mp4_files[0]
-            st.info("YOLO output is already MP4.")
-        elif avi_files:
-            # Need to convert AVI → MP4 using moviepy
-            avi_path = avi_files[0]
-            mp4_path = avi_path.replace(".avi", ".mp4")
-
-            st.info("Converting AVI → MP4 with moviepy...")
-
-            clip = VideoFileClip(avi_path) # New version have from moviepy import instead of moviepy.editor
-    
-            clip.write_videofile(
-                mp4_path,
-                codec="libx264",
-                audio=False, # No need for audio in this case
-                logger=None,  # hides ffmpeg progress inside Streamlit
-            )
-            clip.close()
-
-            output_path = mp4_path
-            st.success("Converted to MP4 successfully!")
-        else:
-            st.error("No YOLO output video found (neither .mp4 nor .avi).")
-            st.stop()
-
-        # Show processed video
-        if output_path and os.path.exists(output_path):
-            st.subheader("YOLO Detection Output")
-            st.video(output_path , autoplay=True)
-        else:
-            st.error("Converted MP4 not found on disk.")
-            st.stop()
-
-        # Stats for last frame / run
-        st.subheader("Last Frame Object Count")
-        counts = count_objects(results)
-        st.write(counts)
+        st.subheader("YOLO Detection Output")
+        st.write("This Video will be deleted when uploading another video, Be sure to move or make a copy!")
+        st.video(h264_path, autoplay=True)

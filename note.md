@@ -17,3 +17,7 @@ The reason I think is validation set is only 25. Learning on 600+ image but vali
 So made a new dataset, this time with 80 validation image. Also made the model YOLOv11 from YOLOv8. Maybe because of more validation, or YOLOv11 is much stronger, maybe both, the result is much better. There is still some error, but it is much more confident on what it is detecting.
 
 I think it is ready, but will try to fine tune more. I have to update the counter for video tomorrow, also change the environment for test case and re test. If it passes the different environment, then it is ready.
+
+Today i fixed the count, so the count is showing on the video now. It was a big hassel though, because as it was encoded in .mp4v, it was not showing. Had to use moviepy to encode properly.
+
+Also for testing, used a totally different environment. It performed very very poorly on images, detecting most of them as battery. Although the video performed very good! Wonder why is that? Although video was much closer, let me run another test...
